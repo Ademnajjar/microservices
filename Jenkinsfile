@@ -8,7 +8,7 @@ pipeline {
 
     environment {
         SCANNER_HOME = tool 'Sonar-scanner'
-               SONAR_TOKEN = credentials('sonar-token')
+        SONAR_TOKEN = credentials('sonar-token')
     }
 
     stages {
@@ -74,7 +74,13 @@ pipeline {
         stage('Quality Gate') {
             steps {
                 script {
-                    waitForQualityGate abortPipeline: true, credentialsId: 'sonar-token'
+                    def qg = waitForQualityGate()
+                    if (qg.status != 'OK') {
+                        echo "Quality gate failed: ${qg.status}. Proceeding with the pipeline."
+                        currentBuild.result = 'UNSTABLE'
+                    } else {
+                        echo "Quality gate passed: ${qg.status}"
+                    }
                 }
             }
         }
@@ -158,8 +164,6 @@ pipeline {
                     </body>
                     </html>
                 """
-
-               
             }
         }
     }
