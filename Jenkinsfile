@@ -85,25 +85,27 @@ pipeline {
             }
         }
 
-        stage('Build') {
+      stage('Build') {
             steps {
                 sh "mvn package"
             }
         }
 
-        stage('Publish To Nexus') {
+        /*stage('Publish To Nexus') {
             steps {
                 withMaven(globalMavenSettingsConfig: 'global-settings', jdk: 'jdk17', maven: 'maven3', mavenSettingsConfig: '', traceability: true) {
                     sh "mvn deploy"
                 }
             }
-        }
+        }*/
+
+  
 
         stage('Build & Tag Docker Image') {
             steps {
                 script {
                     withDockerRegistry(credentialsId: 'docker-cred', toolName: 'docker') {
-                        sh "docker build -t Ademnajjar/microservices:latest ."
+                        sh "docker build -t ademnjr/microservices:latest ."
                     }
                 }
             }
@@ -111,7 +113,7 @@ pipeline {
 
         stage('Docker Image Scan') {
             steps {
-                sh "trivy image --format table -o trivy-image-report.html Ademnajjar/microservices:latest"
+                sh "trivy image --format table -o trivy-image-report.html ademnjr/microservices:latest "
             }
         }
 
@@ -119,7 +121,7 @@ pipeline {
             steps {
                 script {
                     withDockerRegistry(credentialsId: 'docker-cred', toolName: 'docker') {
-                        sh "docker push Ademnajjar/microservices:latest"
+                        sh "docker push ademnjr/microservices:latest "
                     }
                 }
             }
