@@ -15,9 +15,13 @@ pipeline {
         stage('Start SonarQube') {
             steps {
                 script {
+                    echo "Checking if SonarQube is running..."
                     def sonarRunning = sh(script: 'docker ps -q -f name=sonar', returnStatus: true) == 0
                     if (!sonarRunning) {
+                        echo "SonarQube is not running. Starting SonarQube..."
                         sh 'docker start sonar || docker run -d --name sonar -p 9000:9000 sonarqube'
+                    } else {
+                        echo "SonarQube is already running."
                     }
                 }
             }
@@ -25,18 +29,21 @@ pipeline {
 
         stage('Git Checkout') {
             steps {
+                echo "Checking out the git repository..."
                 git branch: 'main', credentialsId: 'git-cred', url: 'https://github.com/Ademnajjar/microservices.git'
             }
         }
 
         stage('Compile') {
             steps {
+                echo "Compiling the project..."
                 sh "mvn compile"
             }
         }
 
         stage('Test') {
             steps {
+                echo "Running tests..."
                 sh "mvn test"
             }
         }
@@ -44,9 +51,12 @@ pipeline {
         stage('Check Trivy Installation') {
             steps {
                 script {
+                    echo "Checking if Trivy is installed..."
                     def trivyInstalled = sh(script: 'command -v trivy', returnStatus: true) == 0
                     if (!trivyInstalled) {
                         error "Trivy is not installed on this Jenkins agent."
+                    } else {
+                        echo "Trivy is installed."
                     }
                 }
             }
@@ -54,12 +64,14 @@ pipeline {
 
         stage('File System Scan') {
             steps {
+                echo "Running Trivy file system scan..."
                 sh "trivy fs --format table -o trivy-fs-report.html ."
             }
         }
 
         stage('SonarQube Analysis') {
             steps {
+                echo "Running SonarQube analysis..."
                 withSonarQubeEnv('sonar') {
                     sh """${SCANNER_HOME}/bin/sonar-scanner \
                           -Dsonar.projectName=microservices \
@@ -74,6 +86,7 @@ pipeline {
         stage('Quality Gate') {
             steps {
                 script {
+                    echo "Waiting for SonarQube quality gate..."
                     def qg = waitForQualityGate()
                     if (qg.status != 'OK') {
                         echo "Quality gate failed: ${qg.status}. Proceeding with the pipeline."
@@ -87,14 +100,16 @@ pipeline {
 
         stage('Build') {
             steps {
+                echo "Building the project..."
                 sh "mvn package"
             }
         }
 
         stage('Publish To Nexus') {
             steps {
+                echo "Publishing to Nexus..."
                 withMaven(globalMavenSettingsConfig: 'global-settings', jdk: 'jdk17', maven: 'maven3', mavenSettingsConfig: '', traceability: true) {
-                    sh "mvn deploy"
+                    sh "mvn deploy -X"
                 }
             }
         }
@@ -102,6 +117,7 @@ pipeline {
         stage('Build & Tag Docker Image') {
             steps {
                 script {
+                    echo "Building and tagging Docker image..."
                     withDockerRegistry(credentialsId: 'docker-cred', toolName: 'docker') {
                         sh "docker build -t Ademnajjar/microservices:latest ."
                     }
@@ -111,6 +127,7 @@ pipeline {
 
         stage('Docker Image Scan') {
             steps {
+                echo "Running Trivy image scan..."
                 sh "trivy image --format table -o trivy-image-report.html Ademnajjar/microservices:latest"
             }
         }
@@ -118,6 +135,7 @@ pipeline {
         stage('Push Docker Image') {
             steps {
                 script {
+                    echo "Pushing Docker image to registry..."
                     withDockerRegistry(credentialsId: 'docker-cred', toolName: 'docker') {
                         sh "docker push Ademnajjar/microservices:latest"
                     }
@@ -127,6 +145,7 @@ pipeline {
 
         stage('Deploy To Kubernetes') {
             steps {
+                echo "Deploying to Kubernetes..."
                 withKubeConfig(caCertificate: '', clusterName: 'kubernetes', contextName: '', credentialsId: 'k8-cred', namespace: 'webapps', restrictKubeConfigAccess: false, serverUrl: 'https://172.31.8.146:6443') {
                     sh "kubectl apply -f deployment-service.yaml"
                 }
@@ -135,6 +154,7 @@ pipeline {
 
         stage('Verify the Deployment') {
             steps {
+                echo "Verifying the deployment in Kubernetes..."
                 withKubeConfig(caCertificate: '', clusterName: 'kubernetes', contextName: '', credentialsId: 'k8-cred', namespace: 'webapps', restrictKubeConfigAccess: false, serverUrl: 'https://172.31.8.146:6443') {
                     sh "kubectl get pods -n webapps"
                     sh "kubectl get svc -n webapps"
